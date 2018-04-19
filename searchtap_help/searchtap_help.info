@@ -1,0 +1,4 @@
+name = Searchtap view renderer
+description = view renderer
+core = 7.x
+dependencies[] = views

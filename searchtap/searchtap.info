@@ -1,0 +1,4 @@
+name = Searchtap
+description = Provides the search integration with searchtap
+core = 7.x
+configure = admin/config/development/searchtap
