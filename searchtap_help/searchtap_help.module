@@ -3,108 +3,107 @@
 /**
  * Implements hook_views_post_execute().
  */
+
+GLOBAL $dataArray;
+
 function searchtap_help_views_post_execute(&$view) {
-    if($view->name=='gc_product_display_searchtap') {
 
-foreach ($view->result as $key => &$result) {
-    $result->field_commerce_price[0]['rendered']['#markup'] = ((float)($result->field_commerce_price[0]['raw']['amount']))/100;
-  
-$cat = array();
-foreach ($result->field_field_product_category as $col) {
-                $cat[] = $col['rendered']['#markup'];
+    if($view->name=='jsonproduct') {
+        foreach ($view->result as $key => &$result) {
+
+            /*  if(!empty($view->result)) {
+                   foreach($view->result as $row => $result) {
+                       foreach ($view->field as $field_name => $field) {
+
+                               if ($field_name == 'uc_product_image') {
+
+                                   //var_dump($view->result);
+                               }
+
+                       }
+                   }}
+              */
+            $images = array();
+            $images = explode(',',$view->render_field('uc_product_image',$key));
+            foreach ($images as $img) {
+                $doc = new DOMDocument();
+                $p_result_without_null_chars = str_replace("\0", '', $img);
+                $doc->loadHTML($p_result_without_null_chars);
+                $xpath = new DOMXPath($doc);
+                $src[] = $xpath->evaluate("string(//img/@data-src)");
+                $result->view_php_28=$src;
+                // $result->php_1=$src;
+            }
+            /* foreach ($src as $uc)
+             {
+                 $result->field_uc_product_image[0]['rendered']['#item']['uri']=$uc;
+             }*/
+
+            //  $result->field_uc_product_image[0]['rendered']['#item']['uri']=$src;
+            //  var_dump($result);
+            // var_dump($result->view_php_28);
+            $relationship=array();
+            $relationship=explode(',',$view->render_field('field_relationship',$key));
+            // var_dump($relationship);
+            foreach ($relationship as $rel) {
+                $doc = new DOMDocument();
+                $p_result_without_null_chars = str_replace("\0", '', $rel);
+                $doc->loadHTML($p_result_without_null_chars);
+                $xpath = new DOMXPath($doc);
+                $src = $xpath->evaluate("string(//a/@title)");
+                $result->view_php_29=$src;
             }
 
-            if (count($cat) == 0)
-                $cat[0] = "";
 
-            $result->views_php_27 = json_encode($cat);
-            unset($cat);
+            $caketype=array();
+            $caketype=explode(',',$view->render_field('field_cake_type',$key));
 
-
-$result->field_commerce_stock[0]['rendered']['#markup'] = (int)$result->field_commerce_stock[0]['rendered']['#markup'];
-	
-$images = array();
-    $images = explode(',',$view->render_field('field_image',$key));
-$imgs = array();
-foreach($images as $img)
-{
-$temp = file_create_url($img);
-if($temp)
-$imgs[] = htmlspecialchars_decode($temp);
-}
-   $result->views_php_21 = json_encode($imgs);
-    $result->views_php_20 = $result->commerce_product_field_data_field_products_created;
-    $result->field_meta_keywords[0]['rendered']['#markup'] = json_encode(explode(',',$result->field_meta_keywords[0]['rendered']['#markup']));
-$result->field_field_gc_product_size[0]['rendered']['#markup'] = 
-json_encode(explode(',',$result->field_field_gc_product_size[0]['rendered']['#markup']));
-
-$collection = array();
-            foreach ($result->field_field_collections as $col) {
-
-
-                $collection[] = $col['rendered']['#markup'];
+            foreach ($caketype as $cake) {
+                $doc = new DOMDocument();
+                $p_result_without_null_chars = str_replace("\0", '', $cake);
+                $doc->loadHTML($p_result_without_null_chars);
+                $xpath = new DOMXPath($doc);
+                $src = $xpath->evaluate("string(//a/@title)");
+                $result->view_php_31=$src;
             }
 
-            if (count($collection) == 0)
-                $collection[0] = "";
+            $title=array();
+            $title=explode(',',$view->render_field('title',$key));
 
-            $result->views_php_24 = json_encode($collection);
-            unset($collection);
-
-            $cluster = array();
-            foreach ($result->field_field_cluster_product as $cl) {
-                $cluster[] = $cl['rendered']['#markup'];
+            foreach ($title as $t) {
+                $doc = new DOMDocument();
+                $p_result_without_null_chars = str_replace("\0", '', $t);
+                $doc->loadHTML($p_result_without_null_chars);
+                $xpath = new DOMXPath($doc);
+                $src = $xpath->evaluate("string(//a/@title)");
+                $result->view_php_34=$src;
             }
 
-            if (count($cluster) == 0)
-                $cluster[0] = "";
 
-            $result->views_php_25 = json_encode($cluster);
-            unset($cluster);
+            $planttype=array();
+            $planttype=explode(',',$view->render_field('field_plant_type',$key));
 
-            $acc = array();
-            foreach ($result->field_field_accreditation as $ac) {
-                $acc[] = $ac['rendered']['#markup'];
+            foreach ($planttype as $plant) {
+                $doc = new DOMDocument();
+                $p_result_without_null_chars = str_replace("\0", '', $plant);
+                $doc->loadHTML($p_result_without_null_chars);
+                $xpath = new DOMXPath($doc);
+                $src = $xpath->evaluate("string(//a/@title)");
+                $result->view_php_32=$src;
             }
 
-            if (count($acc) == 0)
-                $acc[0] = "";
-            $result->views_php_26 = json_encode($acc);
-            unset($acc);
+            $occasiondata=array();
+            $occasiondata=explode(',',$view->render_field('field_occasion_new',$key));
+            foreach ($occasiondata as $occasion) {
 
-$price = ((float)($result->field_commerce_price[0]['raw']['amount']))/100;
-$discount = (int)$result->field_field_seller_discount[0]['rendered']['#markup'];
-if($discount)
-$dprice = $price - ($price * ($discount/100));
-else
-$dprice = $price;
+                $src = explode(", ",$occasion);
+                $result->view_php_35=$src;
+            }
+
+            //var_dump($view->result);
 
 
-if($dprice <= 500)
-$result->views_php_28 = "below Rs.500";
-else if($dprice >= 500 and $dprice <= 1000)
-$result->views_php_28 = "Rs.500 - Rs.1000";
-else if($dprice >= 1000 and $dprice <= 3000)
-$result->views_php_28 = "Rs.1000 - Rs.3000";
-else if($dprice >= 3000 and $dprice <= 5000)
-$result->views_php_28 = "Rs.3000 - Rs.5000";
-else if($dprice >= 5000 and $dprice <= 10000)
-$result->views_php_28 = "Rs.5000 - Rs.10000";
-else if($dprice >= 10000 and $dprice <= 20000)
-$result->views_php_28 = "Rs.10000 - Rs.20000";
-else if($dprice >= 20000)
-$result->views_php_28 = "above Rs.20000";
-
-//if(isset($result->field_field_seller_discount[0]['rendered']['#markup'])) {
-$discount = (int)$result->field_field_seller_discount[0]['rendered']['#markup'];
-if($discount)
-$result->views_php_29 = $price - ($price * ($discount/100));
-else
-$result->views_php_29 = $price;
-
-
-}
-
+        }
 
     }
 }
