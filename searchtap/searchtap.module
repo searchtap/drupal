@@ -153,3 +153,61 @@ function searchtap_commerce_checkout_complete($order) {
 
     }
 }
+
+/*
+ *
+ *
+ *
+ * */
+
+function searchtap_node_insert($node) {
+
+ if(db_table_exists('searchtap_queue')){
+$date = date('Y-m-d H:i:s');
+ db_insert('searchtap_queue')
+            ->fields(array(
+                'entity_id' =>$node->nid,
+                'action' => 'add',
+                'created_date'=>$date,
+            ))
+            ->execute();
+ }
+watchdog('Data Need To Insert.'.$node->nid);
+}
+
+
+function searchtap_node_update($node){
+ 
+ if(db_table_exists('searchtap_queue')){
+$date = date('Y-m-d H:i:s');
+ db_insert('searchtap_queue')
+            ->fields(array(
+                'entity_id' =>$node->nid,
+                'action' => 'update',
+                'created_date'=>$date,
+            ))
+            ->execute();
+ }
+watchdog('Data Need To Update'.$node->nid);
+
+}
+
+function searchtap_node_delete($node){
+
+ if(db_table_exists('searchtap_queue')){
+ $date = date('Y-m-d H:i:s');
+ db_insert('searchtap_queue')
+            ->fields(array(
+                'entity_id' =>$node->nid,
+                'action' => 'delete',
+                'created_date'=>$date,
+            ))
+            ->execute();
+ }
+watchdog('Data Need to Delete'.$node->nid);
+
+}
+
+
+
+

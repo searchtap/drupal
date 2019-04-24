@@ -1,0 +1,56 @@
+﻿<?php
+/*
+*
+*
+*  Drupal Hook For hook_schema()
+*
+*
+*/
+function searchtap_schema(){
+    $schema['searchtap_queue'] = array(
+        'description' => 'The table for add/update/delete Product data .',
+        'fields' => array(     
+            'id' => array(
+                'description' => 'The primary identifier for subscriber.',
+                'type' => 'serial',
+                'not null' => TRUE,
+                'unsigned' => TRUE,
+            ),
+            'entity_id' => array(
+                'description' => 'Product ID.',
+                'type' => 'varchar',
+                'length' => 255,
+                'not null' => TRUE,
+                'default' => '',
+            ),
+            'action' => array(
+                'description' => 'Action will needed.',
+                'type' => 'varchar',
+                'length' => 255,
+                'not null' => TRUE,
+                'default' =>'',
+            ),
+            'created_date' => array(
+                'description' => 'Created date time(yyyy-mm-dd H:i:s).',
+                'type' => 'varchar',
+                'mysql_type' => 'DATETIME',
+                'not null' => TRUE,
+            ),
+           
+        ),
+        'primary key' => array('id'),
+         
+         
+    );
+     
+    return $schema;
+}
+
+function searchtap_install() {
+drupal_install_schema('searchtap_queue');
+}
+
+function searchtap_uninstall() {
+   drupal_uninstall_schema('searchtap_queue');
+}
+
