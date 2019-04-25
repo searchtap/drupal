@@ -8,102 +8,75 @@ GLOBAL $dataArray;
 
 function searchtap_help_views_post_execute(&$view) {
 
+    $images = array();
+    $occasiondata=array();
+    $relationship=array();
+    $caketype=array();
+    $title=array();
+    $planttype=array();
+
     if($view->name=='jsonproduct') {
-        foreach ($view->result as $key => &$result) {
-
-            /*  if(!empty($view->result)) {
-                   foreach($view->result as $row => $result) {
-                       foreach ($view->field as $field_name => $field) {
-
-                               if ($field_name == 'uc_product_image') {
-
-                                   //var_dump($view->result);
-                               }
-
-                       }
-                   }}
-              */
-            $images = array();
-            $images = explode(',',$view->render_field('uc_product_image',$key));
-            foreach ($images as $img) {
-                $doc = new DOMDocument();
-                $p_result_without_null_chars = str_replace("\0", '', $img);
-                $doc->loadHTML($p_result_without_null_chars);
-                $xpath = new DOMXPath($doc);
-                $src[] = $xpath->evaluate("string(//img/@data-src)");
-                $result->view_php_28=$src;
-                // $result->php_1=$src;
-            }
-            /* foreach ($src as $uc)
-             {
-                 $result->field_uc_product_image[0]['rendered']['#item']['uri']=$uc;
-             }*/
-
-            //  $result->field_uc_product_image[0]['rendered']['#item']['uri']=$src;
-            //  var_dump($result);
-            // var_dump($result->view_php_28);
-            $relationship=array();
-            $relationship=explode(',',$view->render_field('field_relationship',$key));
-            // var_dump($relationship);
-            foreach ($relationship as $rel) {
-                $doc = new DOMDocument();
-                $p_result_without_null_chars = str_replace("\0", '', $rel);
-                $doc->loadHTML($p_result_without_null_chars);
-                $xpath = new DOMXPath($doc);
-                $src = $xpath->evaluate("string(//a/@title)");
-                $result->view_php_29=$src;
-            }
-
-
-            $caketype=array();
-            $caketype=explode(',',$view->render_field('field_cake_type',$key));
-
-            foreach ($caketype as $cake) {
-                $doc = new DOMDocument();
-                $p_result_without_null_chars = str_replace("\0", '', $cake);
-                $doc->loadHTML($p_result_without_null_chars);
-                $xpath = new DOMXPath($doc);
-                $src = $xpath->evaluate("string(//a/@title)");
-                $result->view_php_31=$src;
-            }
-
-            $title=array();
-            $title=explode(',',$view->render_field('title',$key));
-
-            foreach ($title as $t) {
-                $doc = new DOMDocument();
-                $p_result_without_null_chars = str_replace("\0", '', $t);
-                $doc->loadHTML($p_result_without_null_chars);
-                $xpath = new DOMXPath($doc);
-                $src = $xpath->evaluate("string(//a/@title)");
-                $result->view_php_34=$src;
-            }
-
-
-            $planttype=array();
-            $planttype=explode(',',$view->render_field('field_plant_type',$key));
-
-            foreach ($planttype as $plant) {
-                $doc = new DOMDocument();
-                $p_result_without_null_chars = str_replace("\0", '', $plant);
-                $doc->loadHTML($p_result_without_null_chars);
-                $xpath = new DOMXPath($doc);
-                $src = $xpath->evaluate("string(//a/@title)");
-                $result->view_php_32=$src;
-            }
-
-            $occasiondata=array();
-            $occasiondata=explode(',',$view->render_field('field_occasion_new',$key));
-            foreach ($occasiondata as $occasion) {
-
-                $src = explode(", ",$occasion);
-                $result->view_php_35=$src;
-            }
-
-            //var_dump($view->result);
-
-
-        }
-
+    foreach ($view->result as $key => &$result) {
+    $doc = new DOMDocument();
+    $images = explode(',',$view->render_field('uc_product_image',$key));
+    foreach ($images as $img) {
+        $p_result_without_null_chars = str_replace("\0", '', $img);
+        $doc->loadHTML($p_result_without_null_chars);
+        $xpath = new DOMXPath($doc);
+        $src[] = $xpath->evaluate("string(//img/@data-src)");
+        $result->view_php_28=$src;
     }
+
+
+   $relationship=explode(',',$view->render_field('field_relationship',$key));
+    foreach ($relationship as $rel) {
+        $p_result_without_null_chars = str_replace("\0", '', $rel);
+        $doc->loadHTML($p_result_without_null_chars);
+        $xpath = new DOMXPath($doc);
+        $src = $xpath->evaluate("string(//a/@title)");
+        $result->view_php_29=$src;
+    }
+
+   $caketype=explode(',',$view->render_field('field_cake_type',$key));
+   foreach ($caketype as $cake) {
+        $p_result_without_null_chars = str_replace("\0", '', $cake);
+        $doc->loadHTML($p_result_without_null_chars);
+        $xpath = new DOMXPath($doc);
+        $src = $xpath->evaluate("string(//a/@title)");
+        $result->view_php_31=$src;
+    }
+
+
+   $title=explode(',',$view->render_field('title',$key));
+   foreach ($title as $t) {
+        $p_result_without_null_chars = str_replace("\0", '', $t);
+        $doc->loadHTML($p_result_without_null_chars);
+        $xpath = new DOMXPath($doc);
+        $src = $xpath->evaluate("string(//a/@title)");
+        $result->view_php_34=$src;
+    }
+
+   $planttype=explode(',',$view->render_field('field_plant_type',$key));
+   foreach ($planttype as $plant) {
+        $p_result_without_null_chars = str_replace("\0", '', $plant);
+        $doc->loadHTML($p_result_without_null_chars);
+        $xpath = new DOMXPath($doc);
+        $src = $xpath->evaluate("string(//a/@title)");
+        $result->view_php_32=$src;
+    }
+
+
+  $occasiondata=explode(',',$view->render_field('field_occasion_new',$key));
+  foreach ($occasiondata as $occasion) {
+
+             $src = explode(", ",$occasion);
+             $result->view_php_35=$src;
+   }
+
+  
+  
+   }
+
+  }
 }
+
