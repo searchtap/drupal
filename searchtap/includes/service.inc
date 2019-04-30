@@ -325,6 +325,7 @@ function searchtap_add_instance_delete($form, &$form_state, $count)
     variable_del('searchtap_fields_' . $count);
     drupal_set_message(t('Deleted successfully'));
 }
+
 function searchtap_cron_reindex()
 {
     $count = variable_get('searchtap_count');

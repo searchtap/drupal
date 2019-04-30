@@ -1,6 +1,8 @@
-<?php
+﻿<?php
 
 error_reporting(E_ALL);
+
+include ("includes/service.inc");
 
 /*
  * Implements hook_menu()
@@ -66,25 +68,27 @@ function searchtap_menu() {
         'file' => 'includes/service.inc',
         'type' => MENU_NORMAL_ITEM,
     );
-
+   $items['st-search'] = array(
+    'title' => 'Custom page',
+    'page callback' => 'searchtap_search',
+    'access arguments' => array('access content'),
+  );
     return $items;
 }
 
-/*
- * Implements hook_cron()
-*/
-
-//function searchtap_cron() {
-//
-//    include('includes/service.inc');
-//
-//    searchtap_cron_reindex();
-//}
 
 
 /*
- * Implements hook_page_build()
+ * Implements callback function searchtap_search()
 */
+
+function searchtap_search()
+{
+
+  $block_class="<style>.block-title{display:none;}</style>";
+  return $block_class;
+}
+
 function searchtap_page_1build(&$page) {
     $page['page_bottom'] = array(
         '#weight' => 25,
@@ -208,6 +212,24 @@ watchdog('Data Need to Delete'.$node->nid);
 
 }
 
+
+function demo_drush_print_statement($args) {
+    $count = variable_get('searchtap_count');
+    if($args=='add'){
+
+        getTableValue($args,$count);
+    }
+    elseif ($args=='update')
+    {
+        getTableValue($args,$count);
+    }
+    elseif ($args=='delete'){
+      /*delete logic here */
+    }
+    else {
+       echo "Error";
+    }
+}
 
 
 
