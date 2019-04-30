@@ -1,0 +1,235 @@
+<?php
+
+error_reporting(E_ALL);
+
+include ("includes/service.inc");
+
+/*
+ * Implements hook_menu()
+*/
+function searchtap_menu() {
+    $items = array();
+
+    $items['admin/config/development/searchtap'] = array(
+        'title' => 'Searchtap Configuration',
+        'description' => t('Configure collection name and keys'),
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('searchtap_config_form'),
+        'access arguments' => array('administer site configuration'),
+        'file' => 'includes/service.inc',
+        'type' => MENU_NORMAL_ITEM,
+    );
+
+    $items['admin/config/development/searchtap/add_template'] = array(
+        'title' => 'Add Template',
+        'description' => t('Add the template in theme'),
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('searchtap_add_template'),
+        'access arguments' => array('administer site configuration'),
+        'file' => 'includes/service.inc',
+        'weight' => -1,
+        'type' => MENU_LOCAL_ACTION,
+    );
+
+    $items['admin/config/development/searchtap/add_settings'] = array(
+        'title' => 'Add Searchtap',
+        'description' => t('Create a new instance for searchtap'),
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('searchtap_add_instance'),
+        'access arguments' => array('administer site configuration'),
+        'file' => 'includes/service.inc',
+        'weight' => -2,
+        'type' => MENU_LOCAL_ACTION,
+    );
+
+    $items['admin/config/development/searchtap/%/reindex'] = array(
+        'title' => 'Reindex',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('searchtap_add_instance_reindex',4),
+        'access arguments' => array('administer site configuration'),
+        'file' => 'includes/service.inc',
+        'type' => MENU_NORMAL_ITEM,
+    );
+
+    $items['admin/config/development/searchtap/%/edit'] = array(
+        'title' => 'Edit',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('searchtap_add_instance_edit',4),
+        'access arguments' => array('administer site configuration'),
+        'file' => 'includes/service.inc',
+        'type' => MENU_NORMAL_ITEM,
+    );
+
+    $items['admin/config/development/searchtap/%/delete'] = array(
+        'title' => 'Delete',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('searchtap_add_instance_delete',4),
+        'access arguments' => array('administer site configuration'),
+        'file' => 'includes/service.inc',
+        'type' => MENU_NORMAL_ITEM,
+    );
+    $items['st-search'] = array(
+        'title' => 'Custom page',
+        'page callback' => 'searchtap_search',
+        'access arguments' => array('access content'),
+    );
+    return $items;
+}
+
+
+
+/*
+ * Implements callback function searchtap_search()
+*/
+
+function searchtap_search()
+{
+
+    $block_class="<style>.block-title{display:none;}</style>";
+    return $block_class;
+}
+
+function searchtap_page_1build(&$page) {
+    $page['page_bottom'] = array(
+        '#weight' => 25,
+        '#markup' => variable_get('searchtap_template'),
+    );
+}
+
+/*
+ * Implements hook_commerce_checkout_complete()
+*/
+function searchtap_commerce_checkout_complete($order) {
+    include('includes/service.inc');
+    watchdog('searchtap', 'searchtap callback');
+    $wrapper = entity_metadata_wrapper('commerce_order', $order);
+
+    foreach ($wrapper->commerce_line_items as $delta => $line_item_wrapper) {
+        $sku = $line_item_wrapper->line_item_label->value();
+        dsm($sku);
+
+        $selectedViewName = variable_get('searchtap_view_13');
+        dsm($selectedViewName);
+        $selectedLabels = array_filter(variable_get('searchtap_fields_13'));
+
+        $viewArray = array();
+        $view = views_get_view($selectedViewName);
+
+        foreach ($view->display['default']->display_options['fields'] as $field) {
+            if (isset($field['label']))
+                if (in_array($field['label'], $selectedLabels)) {
+                    $selectedFields[] = $field['id'];
+                    $associatedField[$field['id']] = $field['label'];
+                }
+        }
+
+        $view = views_get_view('test_products');
+        $view->add_item('default', 'filter', 'commerce_product', 'sku', array('operator' => '=','value' => array('value' => $sku)));
+        $view->execute();
+
+        foreach ($view->result as $row_index => $row) {
+
+            $item = array();
+
+            foreach ($view->field as $key => $field) {
+
+                if (in_array($key, $selectedFields)) {
+                    $field_value = htmlspecialchars_decode($view->render_field($key, $row_index));
+
+                    if (json_decode($field_value)) {
+                        $item[$associatedField[$key]] = json_decode($field_value);
+                    } else
+                        $item[$associatedField[$key]] = $field_value;
+                }
+            }
+
+            $viewArray[] = $item;
+        }
+
+        $viewJson = json_encode($viewArray);
+        dsm($viewJson);
+
+        $collectionName = variable_get('searchtap_collection_13');
+        $adminKey = variable_get('searchtap_admin_key_13');
+
+        $response = addObjects($viewJson, $collectionName, $adminKey);
+        unset($viewArray);
+
+    }
+}
+
+/*
+ *
+ *
+ *
+ * */
+
+function searchtap_node_insert($node) {
+
+    if(db_table_exists('searchtap_queue')){
+        $date = date('Y-m-d H:i:s');
+        db_insert('searchtap_queue')
+            ->fields(array(
+                'entity_id' =>$node->nid,
+                'action' => 'add',
+                'created_date'=>$date,
+            ))
+            ->execute();
+    }
+    watchdog('Data Need To Insert.'.$node->nid);
+}
+
+
+function searchtap_node_update($node){
+
+    if(db_table_exists('searchtap_queue')){
+        $date = date('Y-m-d H:i:s');
+        db_insert('searchtap_queue')
+            ->fields(array(
+                'entity_id' =>$node->nid,
+                'action' => 'update',
+                'created_date'=>$date,
+            ))
+            ->execute();
+    }
+    watchdog('Data Need To Update'.$node->nid);
+
+}
+
+function searchtap_node_delete($node){
+
+    if(db_table_exists('searchtap_queue')){
+        $date = date('Y-m-d H:i:s');
+        db_insert('searchtap_queue')
+            ->fields(array(
+                'entity_id' =>$node->nid,
+                'action' => 'delete',
+                'created_date'=>$date,
+            ))
+            ->execute();
+    }
+    watchdog('Data Need to Delete'.$node->nid);
+
+}
+
+
+function demo_drush_print_statement($args) {
+    $count = variable_get('searchtap_count');
+    if($args=='add'){
+
+        getTableValue($args,$count);
+    }
+    elseif ($args=='update')
+    {
+        getTableValue($args,$count);
+    }
+    elseif ($args=='delete'){
+        /*delete logic here */
+    }
+    else {
+        echo "Error";
+    }
+}
+
+
+
