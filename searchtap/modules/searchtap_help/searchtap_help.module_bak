@@ -1,0 +1,95 @@
+<?php
+
+/**
+ * Implements hook_views_post_execute().
+ */
+
+GLOBAL $dataArray;
+
+function searchtap_help_views_post_execute(&$view) {
+
+    if($view->name=='jsonproduct') {
+        foreach ($view->result as $key => &$result) {
+
+           $doc = new DOMDocument();
+
+/*----------------------------------- Image Data Format--------------------------------------------*/
+
+           $images = explode(',',$view->render_field('uc_product_image',$key));
+            foreach ($images as $img) {
+                $p_result_without_null_chars = str_replace("\0", '', $img);
+                $doc->loadHTML($p_result_without_null_chars);
+                $tags = $doc->getElementsByTagName('img');
+                $imgArr = array();
+                foreach ($tags as $tag) {
+                    $imgSrc[] = $tag->getAttribute('data-src');
+                }
+            }
+            $result->views_php_33=json_encode($imgSrc);
+
+            unset($imgSrc);
+
+ /*------------------------------------- Stock QTY Condition------------------------------------------------*/
+
+            $typeval = explode(',',$view->render_field('type',$key));
+
+            $levelval = $view->render_field('stock',$key);
+            $delthrgh= $view->render_field('field_through',$key);
+
+
+            if($delthrgh=="Vendor" && $levelval[0]=="0")
+            { //  echo  $typeval[0]." ";
+                $result->uc_product_stock_stock=(int)$levelval+1;
+                //var_dump( $result->uc_product_stock_stock);
+            }
+
+
+/*-------------------------------------- Product Collection Value Format -------------------------------------------------------*/
+            $value1=explode(',',$view->render_field('field_product_collection',$key));
+           // var_dump($value1);
+            foreach($value1 as $val){
+
+               $firstCharacter = explode('-',$val);
+               str_replace('None', 'Mixed Type', $firstCharacter[0]);
+               if($firstCharacter[0]){
+
+                   $typeval1[]=str_replace('None', 'Mixed Type', $firstCharacter[0]);
+
+                   }
+               if($firstCharacter[1]){
+
+                   $fldval[]=str_replace('None', 'Mixed', $firstCharacter[1]);
+               }
+//               preg_match_all('# - ([^\s]+) #', $val, $matches);
+//               str_replace('None', 'Mixed', $matches[1]);
+//               if( !is_null($matches[1])){
+//                $fldval[]=implode(' ', $matches[1]);
+//
+//               }
+
+            }
+
+            if($fldval){
+            $result->views_php_34=json_encode(array_unique(array_map('trim',array_values(array_filter($fldval)))));
+
+            }
+            if($typeval1) {
+                $result->views_php_35 = json_encode(array_unique(array_map('trim', array_values(array_filter($typeval1)))));// flowerType null
+            }
+            unset($fldval);
+            unset($typeval1);
+
+/*---------------------------------- Relationship Data Format -----------------------------------------------*/
+        //   $relationDtaa= array_unique(explode(',',$view->render_field('field_relationship',$key)));
+        // $result->field_data= array_map('trim',$relationDtaa);
+
+
+/*---------------------------------- Event Data Format -----------------------------------------------*/
+        //   $eventData=  explode(',',$view->render_field('field_event_name',$key));
+        // $result->event_data=$eventData ;
+
+
+
+        }
+    }
+}

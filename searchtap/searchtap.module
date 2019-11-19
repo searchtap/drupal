@@ -1,7 +1,6 @@
 <?php
 
-error_reporting(E_ALL);
-
+define('SEARCHTAP_APP_PLACEHOLDER', '<!-- [SEARCHTAP_APP_PLACEHOLDER] -->');
 include ("includes/service.inc");
 
 /*
@@ -89,11 +88,33 @@ function searchtap_search()
     return $block_class;
 }
 
-function searchtap_page_1build(&$page) {
-    $page['page_bottom'] = array(
-        '#weight' => 25,
-        '#markup' => variable_get('searchtap_template'),
-    );
+function searchtap_page_build(&$page) {
+    $serach_tap_template = variable_get('searchtap_template', '');
+    if (!empty($serach_tap_template) && !path_is_admin(current_path())) {
+        // $page['page_bottom'] = array(
+        //     '#weight' => 25,
+        //     '#markup' => $serach_tap_template,
+        // );
+
+        // $static_file_path = drupal_get_path('module', 'searchtap');
+        // drupal_add_css($static_file_path . '/react/css/2.searchtap.chunk.css');
+        // drupal_add_css($static_file_path . '/react/css/main.searchtap.chunk.css');
+
+        // drupal_add_js($static_file_path . '/react/js/runtime~main.searchtap.chunk.js', array(
+        //     'scope' => 'footer',
+        //     'weight' => 100
+        // ));
+
+        // drupal_add_js($static_file_path . '/react/js/2.searchtap.chunk.js', array(
+        //     'scope' => 'footer',
+        //     'weight' => 101
+        // ));
+
+        // drupal_add_js($static_file_path . '/react/js/main.searchtap.chunk.js',  array(
+        //     'scope' => 'footer',
+        //     'weight' => 102
+        // ));
+    }
 }
 
 /*
@@ -179,57 +200,375 @@ function searchtap_node_insert($node) {
     watchdog('Data Need To Insert.'.$node->nid);
 }
 
-
 function searchtap_node_update($node){
 
-    if(db_table_exists('searchtap_queue')){
-        $date = date('Y-m-d H:i:s');
-        db_insert('searchtap_queue')
-            ->fields(array(
-                'entity_id' =>$node->nid,
-                'action' => 'update',
-                'created_date'=>$date,
-            ))
-            ->execute();
+    if(db_table_exists('searchtap_queue')) {
+        $exists=db_query('SELECT 1 FROM {searchtap_queue} WHERE entity_id = :uid', array(':uid' => $node->nid))->fetchField();
+        if ($exists == FALSE) { // returns TRUE is there is a record.
+            $date = date('Y-m-d H:i:s');
+            db_insert('searchtap_queue')
+                ->fields(array(
+                    'entity_id' => $node->nid,
+                    'action' => 'add',
+                    'created_date' => $date,
+                ))
+                ->execute();
+        } else {
+            $date = date('Y-m-d H:i:s');
+            $updatequery = db_update('searchtap_queue')
+                ->fields(array(
+                    'entity_id' => $node->nid,
+                    'action' => 'add',
+                    'created_date' => $date,
+                ))
+                ->condition('entity_id', $node->nid)
+                ->execute();
+
+        }
     }
+
     watchdog('Data Need To Update'.$node->nid);
 
 }
 
 function searchtap_node_delete($node){
 
-    if(db_table_exists('searchtap_queue')){
-        $date = date('Y-m-d H:i:s');
-        db_insert('searchtap_queue')
-            ->fields(array(
-                'entity_id' =>$node->nid,
-                'action' => 'delete',
-                'created_date'=>$date,
-            ))
-            ->execute();
+
+       if(db_table_exists('searchtap_queue')) {
+        $exists=db_query('SELECT 1 FROM {searchtap_queue} WHERE entity_id = :uid', array(':uid' => $node->nid))->fetchField();
+        if ($exists == FALSE) { // returns TRUE is there is a record.
+            $date = date('Y-m-d H:i:s');
+            db_insert('searchtap_queue')
+                ->fields(array(
+                    'entity_id' => $node->nid,
+                    'action' => 'delete',
+                    'created_date' => $date,
+                ))
+                ->execute();
+        }
+        else {
+            $date = date('Y-m-d H:i:s');
+            $updatequery = db_update('searchtap_queue')
+                ->fields(array(
+                    'entity_id' => $node->nid,
+                    'action' => 'delete',
+                    'created_date' => $date,
+                ))
+                ->condition('entity_id', $node->nid)
+                ->execute();
+
+        }
     }
+
     watchdog('Data Need to Delete'.$node->nid);
 
 }
 
 
 function demo_drush_print_statement($args) {
+    error_reporting(0);
     $count = variable_get('searchtap_count');
-    if($args=='add'){
-
+    if($args=='add'||$args=='update'||$args=='delete'){
         getTableValue($args,$count);
     }
-    elseif ($args=='update')
+    else if($args=='partial')
     {
         getTableValue($args,$count);
     }
-    elseif ($args=='delete'){
-        /*delete logic here */
+    else if($args=='deletefullsync')
+    {
+        deleteFullsync();
     }
+
     else {
-        echo "Error";
+        // For Full Sync
+        searchtap_cron_reindex();
+    }
+
+
+}
+
+/**
+ * Implements hook_views_post_execute().
+ * By Searchtap.io
+ */
+
+function searchtap_views_post_execute(&$view) {
+
+    if($view->name=='jsonproduct') {
+        foreach ($view->result as $key => &$result) {
+
+           $doc = new DOMDocument();
+
+/*----------------------------------- Image Data Format--------------------------------------------*/
+
+           $images = explode(',',$view->render_field('uc_product_image',$key));
+            foreach ($images as $img) {
+                $p_result_without_null_chars = str_replace("\0", '', $img);
+                $doc->loadHTML($p_result_without_null_chars);
+                $tags = $doc->getElementsByTagName('img');
+                foreach ($tags as $tag) {
+                    $imgSrc[] = $tag->getAttribute('data-src');
+                }
+            }
+            $result->views_php_33=json_encode(array_values(array_filter($imgSrc)));
+
+            unset($imgSrc);
+
+ /*------------------------------------- Stock QTY Condition------------------------------------------------*/
+
+            $typeval = explode(',',$view->render_field('type',$key));
+
+            $levelval = $view->render_field('stock',$key);
+            $delthrgh= $view->render_field('field_through',$key);
+
+
+            if($delthrgh=="Vendor" && $levelval[0]=="0")
+            {
+                $result->uc_product_stock_stock=(int)$levelval+1;
+            }
+
+
+/*-------------------------------------- Product Collection Value Format -------------------------------------------------------*/
+
+            $value1=explode(',',$view->render_field('field_product_collection',$key));
+            foreach($value1 as $val){
+               $firstCharacter = explode('-',$val);
+               str_replace('None', 'Mixed Type', $firstCharacter[0]);
+               if($firstCharacter[0]){
+
+                   $typeval1[]=str_replace('None', 'Mixed Type', $firstCharacter[0]);
+
+                   }
+               if($firstCharacter[1]){
+
+                   $fldval[]=str_replace('None', 'Mixed', $firstCharacter[1]);
+               }
+
+            }
+
+            if($fldval){
+            $result->views_php_34=json_encode(array_unique(array_map('trim',array_values(array_filter($fldval)))));// ColorType Value
+
+            }
+            if($typeval1) {
+                $result->views_php_35 = json_encode(array_unique(array_map('trim', array_values(array_filter($typeval1)))));// FlowerType Value
+            }
+            unset($fldval);
+            unset($typeval1);
+
+/*---------------------------------- Relationship Data Format() -----------------------------------------------*/
+
+
+            $relationData= array_unique(explode(',',$view->render_field('field_relationship',$key)));
+            foreach ($relationData as $relation) {
+                if (!empty($relation))
+                    $result->views_php_36 = json_encode(array_unique(array_map('trim', $relationData)));
+            }
+
+/*---------------------------------------- Event Data Format() -----------------------------------------------*/
+
+           $eventData=explode(',',$view->render_field('field_event_name',$key));
+           foreach ($eventData as $event) {
+               if(!empty($event))
+               $result->views_php_37 = json_encode(array_map('trim', $eventData));
+           }
+/*---------------------------------------- Plant Data Format () -----------------------------------------------*/
+
+            $plantData=array_unique(explode(',',$view->render_field('field_plant_type',$key)));
+            foreach ($plantData as $plant) {
+                if (!empty($plant)) {
+                    $result->views_php_38 = htmlspecialchars_decode(json_encode(array_map('trim',$plantData)));
+                }
+            }
+
+/*---------------------------------------- Title Data Format() -----------------------------------------------*/
+
+            $titleData= $view->render_field('title',$key);
+            $result->views_php_39=htmlspecialchars_decode($titleData,ENT_QUOTES);
+
+
+
+/*---------------------------------------- Delivery Through Data Format()  -----------------------------------------------*/
+
+           $deliverythrghData=$view->render_field('field_through',$key);
+           if($deliverythrghData){
+                            $result->views_php_40 =htmlspecialchars_decode($deliverythrghData);
+           }
+           else
+            {
+                              $field_value="Vendor";
+                              $result->views_php_40 =htmlspecialchars_decode($field_value);
+            }
+
+/*---------------------------------------- Field Occcasion Data Format() -----------------------------------------------*/
+
+            $fieldoccasionData=array_unique(explode(',',$view->render_field('field_occasion_new',$key)));
+            foreach($fieldoccasionData as $occassion)
+            {
+                if(!empty($occassion))
+                $result->views_php_41 =json_encode(array_map('trim',$fieldoccasionData));
+            }
+
+
+/*---------------------------------------- Bouquet Data Format() -----------------------------------------------*/
+
+           $bouquetData=  array_unique(explode(',',$view->render_field('field_bouquet',$key)));
+            foreach ($bouquetData as $bouquet) {
+                if (!empty($bouquet))
+                    $result->views_php_42 = json_encode(array_map('trim', $bouquetData));
+            }
+
+
+/*---------------------------------------- Gift Data Format() -----------------------------------------------*/
+            $giftdataData=array_unique(explode(',',$view->render_field('field_gift_type',$key)));
+            foreach ($giftdataData as $gift) {
+                if(!empty($gift))
+                $result->views_php_43 = json_encode(array_map('trim', $giftdataData));
+            }
+/*---------------------------------------- Available city Data Format() -----------------------------------------------*/
+           $availablecityData=  array_unique(explode(',',$view->render_field('field_available_cities',$key)));
+           foreach ($availablecityData as $availcity){
+
+           if(!empty($availcity))
+           {
+            $result->views_php_44 =json_encode(array_map('trim',$availablecityData));
+
+           }
+           else{
+           $field_value="All";
+           $result->views_php_44 = $field_value;
+           }
+
+           }
+
+/*---------------------------------------- Stock Data Format () -----------------------------------------------*/
+           $stockData=  explode(',',$view->render_field('stock',$key));
+           $result->stock=(int)$stockData ;
+
+/*---------------------------------------- List Price Data Format () -----------------------------------------------*/
+
+           $listpriceData=$view->render_field('list_price',$key);
+           if(is_string($listpriceData))
+           {
+               $result->list_price = (int)str_replace(',', '', $listpriceData);
+           }
+           else
+           {
+              $result->list_price = (int)$listpriceData;
+           }
+
+/*---------------------------------------- Sell Price Data Format() -----------------------------------------------*/
+
+           $sellpriceData=$view->render_field('sell_price',$key);
+           if(is_string($sellpriceData))
+           {
+                $result->sell_price = (int)str_replace(',', '', $sellpriceData);
+           }
+           else
+           {
+                $result->sell_price = (int)$sellpriceData;
+           }
+
+        }
     }
 }
 
+/**
+ * Implements hook_block_view_alter(&$data, $block).
+ */
+function searchtap_block_view_alter(&$data, $block) {
 
+    // 53: FA Footer block on desktop
+    // 49: Footer links on mobile block on mobile
+    if (in_array($block->delta, ['53', '49']) && strpos($data['content'], 'SEARCHTAP_APP_PLACEHOLDER') !== FALSE) {
+			$add_search_header = TRUE;
+			if (!fa_product_render_react_app()) {
+				$data['content'] = _searchtap_inject_react_build($data['content']);
+				$data['content'] .= '<script>if(window.FaSearchTap){window.FaSearchTap();}</script>';
+				$add_search_header = FALSE;
+			}
 
+			drupal_add_js(array(
+			'searchTap'=> array(
+				'addSeachHeader' => $add_search_header
+				),
+			), 'setting');
+    }
+}
+
+/**
+ * Implementation of hook_preprocess_HOOK();
+ */
+function searchtap_preprocess_page(&$variables){
+	$footer_region = [];
+	$enable_debugging = variable_get('searchtap_enable_debugging', FALSE);
+	$desktop_block_id = 'block_53';
+	$mobile_block_id = 'block_49';
+	$render_react_app = fa_product_render_react_app();
+
+	if (!$render_react_app && isset($variables['page']['footer']) && is_array($variables['page']['footer'])) {
+		$footer_region = &$variables['page']['footer'];
+	}
+
+	// form desktop
+	if (!$render_react_app && array_key_exists($desktop_block_id, $footer_region) && strpos($footer_region[$desktop_block_id]['#markup'], 'searchModal') === FALSE) {
+		$footer_region[$desktop_block_id] = _searchtap_inject_react_build($footer_region[$desktop_block_id]);
+		if ($enable_debugging) {
+			watchdog('searchtap', 'Missed searchtap_block_view_alter: Desktop');
+		}
+	}
+
+	// form mobile
+	if (array_key_exists($mobile_block_id, $footer_region) && strpos($footer_region[$mobile_block_id]['#markup'], 'searchModal') === FALSE) {
+		$footer_region[$mobile_block_id] = _searchtap_inject_react_build($footer_region[$mobile_block_id]);
+		if ($enable_debugging) {
+			watchdog('searchtap', 'Missed searchtap_block_view_alter: Mobile');
+		}
+	}
+}
+
+/**
+ * Inject searchtap react build.
+ *
+ * @param string|array $renderable
+ * @return string|array $renderable
+ */
+function _searchtap_inject_react_build($renderable, $attach_js = TRUE) {
+	$attach_js_css['#attached'] = _searchtap_module_get_app_file_paths();
+	$searchtap_react_app_runtime_env = '<div id="searchModal" classname="container"></div><script>var window = window || {}; window.FaSearchTap = function() {if(!document.getElementById("searchModal")){ return false;}!function(e){function r(r){for(var n,l,a=r[0],i=r[1],f=r[2],p=0,s=[];p<a.length;p++)l=a[p],o[l]&&s.push(o[l][0]),o[l]=0;for(n in i)Object.prototype.hasOwnProperty.call(i,n)&&(e[n]=i[n]);for(c&&c(r);s.length;)s.shift()();return u.push.apply(u,f||[]),t()}function t(){for(var e,r=0;r<u.length;r++){for(var t=u[r],n=!0,a=1;a<t.length;a++){var i=t[a];0!==o[i]&&(n=!1)}n&&(u.splice(r--,1),e=l(l.s=t[0]))}return e}var n={},o={1:0},u=[];function l(r){if(n[r])return n[r].exports;var t=n[r]={i:r,l:!1,exports:{}};return e[r].call(t.exports,t,t.exports,l),t.l=!0,t.exports}l.m=e,l.c=n,l.d=function(e,r,t){l.o(e,r)||Object.defineProperty(e,r,{enumerable:!0,get:t})},l.r=function(e){"undefined"!==typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0})},l.t=function(e,r){if(1&r&&(e=l(e)),8&r)return e;if(4&r&&"object"===typeof e&&e&&e.__esModule)return e;var t=Object.create(null);if(l.r(t),Object.defineProperty(t,"default",{enumerable:!0,value:e}),2&r&&"string"!=typeof e)for(var n in e)l.d(t,n,function(r){return e[r]}.bind(null,n));return t},l.n=function(e){var r=e&&e.__esModule?function(){return e.default}:function(){return e};return l.d(r,"a",r),r},l.o=function(e,r){return Object.prototype.hasOwnProperty.call(e,r)},l.p="/sites/all/modules/custom/searchtap/react/";var a=window.webpackJsonpSearchTap=window.webpackJsonpSearchTap||[],i=a.push.bind(a);a.push=r,a=a.slice();for(var f=0;f<a.length;f++)r(a[f]);var c=i;t()}([]);};</script>';
+
+	if (is_string($renderable)) {
+		$renderable = str_replace(SEARCHTAP_APP_PLACEHOLDER, $searchtap_react_app_runtime_env, $renderable);
+		if ($attach_js) {
+			$renderable .= drupal_render($attach_js_css);
+		}
+	}
+
+	if (is_array($renderable)) {
+		$renderable['#markup'] = str_replace(SEARCHTAP_APP_PLACEHOLDER, $searchtap_react_app_runtime_env, $renderable['#markup']);
+		if ($attach_js) {
+			$renderable['#attached'] = isset($renderable['#attached']) ? $renderable['#attached'] : [];
+			$renderable['#attached'] += $attach_js_css['#attached'];
+		}
+	}
+	return $renderable;
+}
+
+/**
+ * Get react app build path.
+ */
+function _searchtap_module_get_app_file_paths() {
+	$module_path = drupal_get_path('module', 'searchtap');
+
+	$paths['css'] = array(
+	 	"$module_path/react/css/main.searchtap.chunk.css",
+	);
+
+	$paths['js'] = array(
+		"$module_path/react/js/2.searchtap.chunk.js",
+		"$module_path/react/js/main.searchtap.chunk.js",
+	);
+
+	return $paths;
+}

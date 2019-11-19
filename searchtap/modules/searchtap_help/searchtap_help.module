@@ -1,0 +1,184 @@
+<?php
+
+/**
+ * Implements hook_views_post_execute().
+  By Searchtap.io*/
+
+function searchtap_help_views_post_execute(&$view) {
+
+    if($view->name=='jsonproduct') {
+        foreach ($view->result as $key => &$result) {
+
+           $doc = new DOMDocument();
+
+/*----------------------------------- Image Data Format--------------------------------------------*/
+
+           $images = explode(',',$view->render_field('uc_product_image',$key));
+            foreach ($images as $img) {
+                $p_result_without_null_chars = str_replace("\0", '', $img);
+                $doc->loadHTML($p_result_without_null_chars);
+                $tags = $doc->getElementsByTagName('img');
+                foreach ($tags as $tag) {
+                    $imgSrc[] = $tag->getAttribute('data-src');
+                }
+            }
+            $result->views_php_33=json_encode(array_values(array_filter($imgSrc)));
+
+            unset($imgSrc);
+
+ /*------------------------------------- Stock QTY Condition------------------------------------------------*/
+
+            $typeval = explode(',',$view->render_field('type',$key));
+
+            $levelval = $view->render_field('stock',$key);
+            $delthrgh= $view->render_field('field_through',$key);
+
+
+            if($delthrgh=="Vendor" && $levelval[0]=="0")
+            {
+                $result->uc_product_stock_stock=(int)$levelval+1;
+            }
+
+
+/*-------------------------------------- Product Collection Value Format -------------------------------------------------------*/
+
+            $value1=explode(',',$view->render_field('field_product_collection',$key));          
+            foreach($value1 as $val){
+               $firstCharacter = explode('-',$val);
+               str_replace('None', 'Mixed Type', $firstCharacter[0]);
+               if($firstCharacter[0]){
+
+                   $typeval1[]=str_replace('None', 'Mixed Type', $firstCharacter[0]);
+
+                   }
+               if($firstCharacter[1]){
+
+                   $fldval[]=str_replace('None', 'Mixed', $firstCharacter[1]);
+               }
+
+            }
+
+            if($fldval){
+            $result->views_php_34=json_encode(array_unique(array_map('trim',array_values(array_filter($fldval)))));// ColorType Value
+
+            }
+            if($typeval1) {
+                $result->views_php_35 = json_encode(array_unique(array_map('trim', array_values(array_filter($typeval1)))));// FlowerType Value
+            }
+            unset($fldval);
+            unset($typeval1);
+
+/*---------------------------------- Relationship Data Format() -----------------------------------------------*/
+
+
+            $relationData= array_unique(explode(',',$view->render_field('field_relationship',$key)));
+            foreach ($relationData as $relation) {
+                if (!empty($relation))
+                    $result->views_php_36 = json_encode(array_unique(array_map('trim', $relationData)));
+            }
+
+/*---------------------------------------- Event Data Format() -----------------------------------------------*/
+
+           $eventData=explode(',',$view->render_field('field_event_name',$key));
+           foreach ($eventData as $event) {
+               if(!empty($event))
+               $result->views_php_37 = json_encode(array_map('trim', $eventData));
+           }
+/*---------------------------------------- Plant Data Format () -----------------------------------------------*/
+
+            $plantData=array_unique(explode(',',$view->render_field('field_plant_type',$key)));
+            foreach ($plantData as $plant) {
+                if (!empty($plant)) {
+                    $result->views_php_38 = json_encode(array_map('trim', $plantData));
+                }
+            }
+
+/*---------------------------------------- Title Data Format() -----------------------------------------------*/
+
+            $titleData= $view->render_field('title',$key);
+            $result->views_php_39=htmlspecialchars_decode($titleData,ENT_QUOTES);
+
+/*---------------------------------------- Delivery Through Data Format()  -----------------------------------------------*/
+
+           $deliverythrghData=$view->render_field('field_through',$key);
+           if($deliverythrghData){
+                            $result->views_php_40 =htmlspecialchars_decode($deliverythrghData);
+           }
+           else
+            {
+                              $field_value="Vendor";
+                              $result->views_php_40 =htmlspecialchars_decode($field_value);
+            }
+
+/*---------------------------------------- Field Occcasion Data Format() -----------------------------------------------*/
+
+            $fieldoccasionData=array_unique(explode(',',$view->render_field('field_occasion_new',$key)));
+            foreach($fieldoccasionData as $occassion)
+            {
+                if(!empty($occassion))
+                $result->views_php_41 =json_encode(array_map('trim',$fieldoccasionData));
+            }
+
+
+/*---------------------------------------- Bouquet Data Format() -----------------------------------------------*/
+
+           $bouquetData=  array_unique(explode(',',$view->render_field('field_bouquet',$key)));
+            foreach ($bouquetData as $bouquet) {
+                if (!empty($bouquet))
+                    $result->views_php_42 = json_encode(array_map('trim', $bouquetData));
+            }
+
+
+/*---------------------------------------- Gift Data Format() -----------------------------------------------*/
+            $giftdataData=array_unique(explode(',',$view->render_field('field_gift_type',$key)));
+            foreach ($giftdataData as $gift) {
+                if(!empty($gift))
+                $result->views_php_43 = json_encode(array_map('trim', $giftdataData));
+            }
+/*---------------------------------------- Available city Data Format() -----------------------------------------------*/
+           $availablecityData=  array_unique(explode(',',$view->render_field('field_available_cities',$key)));
+           foreach ($availablecityData as $availcity){
+
+           if(!empty($availcity))
+           {
+            $result->views_php_44 =json_encode(array_map('trim',$availablecityData));
+
+           }
+           else{
+           $field_value="All";
+           $result->views_php_44 = $field_value;
+           }
+
+           }
+
+/*---------------------------------------- Stock Data Format () -----------------------------------------------*/
+           $stockData=  explode(',',$view->render_field('stock',$key));
+           $result->stock=(int)$stockData ;
+
+/*---------------------------------------- List Price Data Format () -----------------------------------------------*/
+
+           $listpriceData=$view->render_field('list_price',$key);
+           if(is_string($listpriceData))
+           {
+               $result->list_price = (int)str_replace(',', '', $listpriceData);
+           }
+           else
+           {
+              $result->list_price = (int)$listpriceData;
+           }
+
+/*---------------------------------------- Sell Price Data Format() -----------------------------------------------*/
+
+           $sellpriceData=$view->render_field('sell_price',$key);
+           if(is_string($sellpriceData))
+           {
+                $result->sell_price = (int)str_replace(',', '', $sellpriceData);
+           }
+           else
+           {
+                $result->sell_price = (int)$sellpriceData;
+           }
+
+        }
+    }
+}

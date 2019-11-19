@@ -2,8 +2,10 @@
 /*
  * System settings form for searchtap configuration
  */
-error_reporting(0);
+
+//error_reporting(0);
 use Drupal\commerce_checkout\Event\CheckoutCompleteEvent;
+
 $count = 0;
 function getViews()
 {
@@ -14,6 +16,7 @@ function getViews()
     }
     return $viewNames;
 }
+
 function getViewFields($viewName)
 {
     $viewFields = array();
@@ -28,6 +31,7 @@ function getViewFields($viewName)
     }
     return $empty;
 }
+
 function searchtap_config_form($form, &$form_state)
 {
     $header = array(
@@ -59,12 +63,13 @@ function searchtap_config_form($form, &$form_state)
         '#empty' => t('There is no searchtap instance created yet.'),
     );
 }
-function searchtap_reindex($count,$pid,$action)
-{
 
-    $tags = implode(',',$pid);
-    $nid=array($tags);
-    print_r($nid);
+function searchtap_reindex($count, $pid = null, $action = null)
+{
+    if (!empty($pid)) {
+        $tags = implode(',', $pid);
+        $nid = array($tags);
+    }
     //Run the script as admin
     global $user;
     $original_user = $user;
@@ -83,138 +88,92 @@ function searchtap_reindex($count,$pid,$action)
                 $associatedField[$field['id']] = $field['label'];
             }
     }
-    $itemSteps =1000;
+    $itemSteps = 1000;
     $product_count = 0;
     $loop = true;
     $i = 0;
     while ($loop) {
 
-      if($action=="partial"||$action=="add"||$action=="update"){
-        $view = views_get_view($selectedView);
-        $view->set_items_per_page($itemSteps);
-        $view->set_offset($i);
-        $view->set_display('page_1');
-        $view->set_arguments($nid);
-        echo "Count Value: ".count($view->result);
-        $view->execute();
-        //  var_dump($view->result);
-        watchdog('searchtap', $view->total_rows);
-        $i += $itemSteps;
-        if (!count($view->result)) {
-            $loop = false;
-            break;
-        }
-        foreach ($view->result as $row_index => $row) {
-            $item = array();
-            foreach ($view->field as $key => $field) {
-                //    var_dump($view->field);
-                if (in_array($key, $selectedFields)) {
-                    $field_value = htmlspecialchars_decode($view->render_field($key, $row_index));
-                    if ($key == "field_occasion_new" || $key == "field_available_cities" || $key == "field_bouquet" || $key == "field_gift_type") {
-                        $value1 = array_unique(explode(",", $field_value));
-                        $item[$associatedField[$key]] = array_map('trim', $value1);
-                    } else if ($key == "list_price" || $key == "sell_price") {
-                        if (is_string($field_value)) {
-                            $item[$associatedField[$key]] = (int)str_replace(',', '', $field_value);;
-                        } else {
-                            $item[$associatedField[$key]] = (int)$field_value;
-                        }
-                    } elseif ($key == "uc_product_image") {
-                        $doc = new DOMDocument();
-                        $doc->loadHTML($field_value);
-                        $tags = $doc->getElementsByTagName('img');
-                        $imgArr = array();
-                        foreach ($tags as $tag) {
-                            $imgSrc[] = $tag->getAttribute('data-src');
-                        }
-                        $item[$associatedField[$key]] = $imgSrc;
-                        unset($imgSrc);
-                    } else if ($key == "php") {
-                       // echo "Value of Key: " . $key . "  Field Value: " . $field_value . "\n";
-                    } else {
+        if ($action == "partial" || $action == "add" || $action == "update") {
+            $view = views_get_view($selectedView);
+            $view->set_items_per_page($itemSteps);
+            $view->set_offset($i);
+            $view->set_display('page_1');
+            $view->set_arguments($nid);
+            $view->execute();
+            watchdog('searchtap', $view->total_rows);
+            $i += $itemSteps;
+            if (!count($view->result)) {
+                $loop = false;
+                break;
+            }
+
+            foreach ($view->result as $row_index => $row) {
+                $item = array();
+                foreach ($view->field as $key => $field) {
+                    if (in_array($key, $selectedFields)) {
+                        $field_value = htmlspecialchars_decode($view->render_field($key, $row_index));
+
                         if (json_decode($field_value)) {
                             $item[$associatedField[$key]] = json_decode($field_value);
                         } else {
-                         //   echo "Value of Key: " . $key . "  Field Value: " . $field_value . "\n";
-                            $item[$associatedField[$key]] = $field_value;
+                            if ($field_value) {
+                                $item[$associatedField[$key]] = htmlspecialchars_decode($field_value, ENT_QUOTES);
+                            }
                         }
                     }
                 }
+                $viewArray[] = $item;
             }
-            $viewArray[] = $item;
+            $viewJson = json_encode($viewArray);
+            $collectionName = variable_get('searchtap_collection_' . $count);
+            $adminKey = variable_get('searchtap_admin_key_' . $count);
+            $response = addObjects($viewJson, $collectionName, $adminKey);
+            watchdog('searchtap', 'searchtap indexed ' . $i + $itemSteps . ' products ' . $response);
+            unset($viewArray);
+        } else {
+
+            $view = views_get_view($selectedView);
+            $view->set_items_per_page($itemSteps);
+            $view->set_offset($i);
+            $view->execute();
+            watchdog('searchtap', $view->total_rows);
+            $i += $itemSteps;
+            if (!count($view->result)) {
+                $loop = false;
+                break;
+            }
+
+            foreach ($view->result as $row_index => $row) {
+                $item = array();
+                foreach ($view->field as $key => $field) {
+                    if (in_array($key, $selectedFields)) {
+                        $field_value = htmlspecialchars_decode($view->render_field($key, $row_index));
+
+                        if (json_decode($field_value)) {
+                            $item[$associatedField[$key]] = json_decode($field_value);
+                        } else {
+                            if ($field_value) {
+                                $item[$associatedField[$key]] = htmlspecialchars_decode($field_value, ENT_QUOTES);
+                            }
+                        }
+
+                    }
+                }
+                $viewArray[] = $item;
+            }
+            $viewJson = json_encode($viewArray);
+            $collectionName = variable_get('searchtap_collection_' . $count);
+            $adminKey = variable_get('searchtap_admin_key_' . $count);
+            $response = addObjects($viewJson, $collectionName, $adminKey);
+            watchdog('searchtap', 'searchtap indexed ' . $i + $itemSteps . ' products ' . $response);
+            unset($viewArray);
         }
-          print_r($viewArray);
-        $viewJson = json_encode($viewArray);
-        //   print_r($viewJson);
-        $collectionName = variable_get('searchtap_collection_' . $count);
-        $adminKey = variable_get('searchtap_admin_key_' . $count);
-        //  $response = addObjects($viewJson, $collectionName, $adminKey);
-        // watchdog('searchtap', 'searchtap indexed ' . $i + $itemSteps . ' products ' . $response);
-        unset($viewArray);
-      }
-      else{
-          $view = views_get_view($selectedView);
-          $view->set_items_per_page($itemSteps);
-          $view->set_offset($i);
-          $view->execute();
-          //  var_dump($view->result);
-          watchdog('searchtap', $view->total_rows);
-          $i += $itemSteps;
-          if (!count($view->result)) {
-              $loop = false;
-              break;
-          }
-          foreach ($view->result as $row_index => $row) {
-              $item = array();
-              foreach ($view->field as $key => $field) {
-                  //    var_dump($view->field);
-                  if (in_array($key, $selectedFields)) {
-                      $field_value = htmlspecialchars_decode($view->render_field($key, $row_index));
-                      if ($key == "field_occasion_new" || $key == "field_available_cities" || $key == "field_bouquet" || $key == "field_gift_type") {
-                          $value1 = array_unique(explode(",", $field_value));
-                          $item[$associatedField[$key]] = array_map('trim', $value1);
-                      } else if ($key == "list_price" || $key == "sell_price") {
-                          if (is_string($field_value)) {
-                              $item[$associatedField[$key]] = (int)str_replace(',', '', $field_value);;
-                          } else {
-                              $item[$associatedField[$key]] = (int)$field_value;
-                          }
-                      } elseif ($key == "uc_product_image") {
-                          $doc = new DOMDocument();
-                          $doc->loadHTML($field_value);
-                          $tags = $doc->getElementsByTagName('img');
-                          $imgArr = array();
-                          foreach ($tags as $tag) {
-                              $imgSrc[] = $tag->getAttribute('data-src');
-                          }
-                          $item[$associatedField[$key]] = $imgSrc;
-                          unset($imgSrc);
-                      } else if ($key == "php") {
-                          // echo "Value of Key: " . $key . "  Field Value: " . $field_value . "\n";
-                      } else {
-                          if (json_decode($field_value)) {
-                              $item[$associatedField[$key]] = json_decode($field_value);
-                          } else {
-                              //   echo "Value of Key: " . $key . "  Field Value: " . $field_value . "\n";
-                              $item[$associatedField[$key]] = $field_value;
-                          }
-                      }
-                  }
-              }
-              $viewArray[] = $item;
-          }
-          print_r($viewArray);
-          $viewJson = json_encode($viewArray);
-          //   print_r($viewJson);
-          $collectionName = variable_get('searchtap_collection_' . $count);
-          $adminKey = variable_get('searchtap_admin_key_' . $count);
-          //  $response = addObjects($viewJson, $collectionName, $adminKey);
-          // watchdog('searchtap', 'searchtap indexed ' . $i + $itemSteps . ' products ' . $response);
-          unset($viewArray);
-      }
 
     }
+
     //Remove disabled products
+
     $selectedViewDisabledName = variable_get('searchtap_view_disabled' . $count);
     $loop = true;
     $j = 0;
@@ -240,167 +199,106 @@ function searchtap_reindex($count,$pid,$action)
         removeObject($itemIds, $collectionName, $adminKey);
         unset($itemIds);
     }
+    echo "Product Added to Searchtap !!"."\n";
+    checkQueueForDelete($pid);
+
+
     watchdog('searchtap', 'searchtap cron end');
     $user = $original_user;
     drupal_save_session($old_state);
 }
-/*
-function reindexselectedProduct($productIds, $count)
-{
-    try {
-        $nid = array('242,75,246,247,248');
-        print_r($nid);
-        $view = views_get_view("jsonproduct");
-        $view->set_items_per_page(5);
-        $view->set_offset(0);
-        $view->set_display('page_1');
-        $view->set_arguments($nid);
-        $view->execute();
-        var_dump($view->result);
 
-        foreach ($view->result as $row_index => $row) {
-            var_dump($row->nid);
-        }
-    }catch(error $e) {
-        var_dump($e);
-    }
-//    $getJson = array();
-//    $collectionName = variable_get('searchtap_collection_' . $count);
-//    $adminKey = variable_get('searchtap_admin_key_' . $count);
-//    $id = implode(",", $productIds);
-//    echo "Value Of Id: " . $id;
-//    $getJson = getJsonData($id);
-//    $json = json_decode(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $getJson), true);
-//    $formatedValue = formatJson($json);
-//    $response = addObjects($formatedValue, $collectionName, $adminKey);
-//    if ($response == '200' || $response == '201') {
-//        echo "Value Indexed !!";
-//        watchdog('Searchtap indexed selected' . ' products ');
-//        deleteTableValue($productIds);
-//    } else {
-//        echo "Error";
-//        watchdog($response . ' Response Code !');
-//    }
-} */
-function deleteFullSync($productIds, $count)
+// function used in partial indexing for delete
+
+function partialDelete($productIds, $count)
 {
     $itemIds = json_encode($productIds);
-    print_r("Value Is: " . $itemIds);
     $collectionName = variable_get('searchtap_collection_' . $count);
     $adminKey = variable_get('searchtap_admin_key_' . $count);
-//    $response = removeObject($itemIds, $collectionName, $adminKey);
-//    if($response=='200')
-//    {
-//        echo "Delete";
-//        watchdog('product Ids'.$itemIds.' deleted from Searchtap Server!. ');
-//        deleteTableValue($productIds);
-//    }
-//    else {
-//         echo "error";
-//        watchdog($response.' Response Code !');
-//
-//    }
+    $response = removeObject($itemIds, $collectionName, $adminKey);
+    if ($response == '200' || $response == '201') {
+        echo "Product Deleted !"."\n";
+        watchdog('searchtap', 'product Ids' . $itemIds . ' deleted from Searchtap Server!. ');
+
+        //check if there is any product ID in queue that need to be deleted
+        checkQueueForDelete($productIds);
+    } else {
+        echo "Nothing to delete !!";
+        watchdog('searchtap', $response . ' Response Code !');
+
+    }
 }
-function deleteFailsafe()
+
+function deleteFullsync()
 {
     $countval = 1;
     $count = 1000;
     $skip = 0;
     $counter = 0;
     $productIds = array();
+
+    // get product Id's from floweraura server
     $dbIds = getStoreProductIds();
+
+    // get Product Id's from Searchtap server
     $curlReq = searchtapCurl($count, $skip);
     $json = json_decode($curlReq, true);
+
     if ($json["totalHits"] > 0) {
         while ($skip <= $json['totalHits']) {
-            echo "Skip Value : " . $skip;
             $jsondata = searchtapCurl($count, $skip);
-            $json1 = json_decode($jsondata, true);
-            for ($i = 0; $i < count($json1['results']); $i++) {
-                if (in_array($json1['results'][$i]['id'], $dbIds)) {
-                    $missingId[] = $json1['results'][$i]['id'];
+            $productJson = json_decode($jsondata, true);
+            for ($i = 0; $i < count($productJson['results']); $i++) {
+                if (!in_array($productJson['results'][$i]['id'], $dbIds)) {
+                    $missingIds[] = $productJson['results'][$i]['id'];
                 }
             }
             $skip += $count;
         }
     } else echo "Collection is empty!!";
-    if (count($missingId) > 0) {
-        $itemIds = json_encode($productIds);
-        print_r("Value Is: " . $itemIds);
+
+    if ($missingIds && count($missingIds) > 0) {
+        $itemIds = json_encode($missingIds);
+
         $collectionName = variable_get('searchtap_collection_' . $countval);
         $adminKey = variable_get('searchtap_admin_key_' . $countval);
-//            $response = removeObject($itemIds, $collectionName, $adminKey);
-//            if($response=='200')
-//            {
-//             echo "Delete";
-//           watchdog('product Ids'.$itemIds.' deleted from Searchtap Server!. ');
-//            deleteTableValue($productIds);
-//            }
-//           else {
-//              echo "error";
-//                watchdog($response.' Response Code !');
-//
-//              }
+        $response = removeObject($itemIds, $collectionName, $adminKey);
+        if ($response == '200' || $response == '201') {
+            echo " Product Ids'.$itemIds.' Deleted from Searchtap Server !!" . "\n";
+            watchdog('searchtap', $itemIds . 'Deleted from Searchtap Server !!');
+
+            //check if there is any product ID in queue that need to be deleted
+            checkQueueForDelete($missingIds);
+        } else {
+            echo "Something Wrong With Searchtap API's Response!";
+            watchdog('searchtap', $response . ' Response Code !');
+
+        }
+    } else {
+        echo "No Match Found !!";
     }
-//    foreach (searchtapCurl($count, $skip) as $object) {
-//
-//        $productIds[] = $object->id;
-//
-//        $counter++;
-//        if ($counter === $count) {
-//            $idsToBeDeleted = array_values(array_diff($productIds, $dbIds));
-//            if (count($idsToBeDeleted) > 0){
-//                 print_r($idsToBeDeleted);
-//                }
-//            $counter = 0;
-//            unset($productIds);
-//        }
-//        $skip += $count;
-//    }
-//        print_r($productIds);
-//    if (count($productIds) > 0) {
-//        $idsToBeDeleted = array_values(array_diff($productIds, $dbIds));
-//        if (count($idsToBeDeleted) > 0){
-//            $itemIds=json_encode($productIds);
-//            print_r("Value Is: ".$itemIds);
-//            $collectionName = variable_get('searchtap_collection_' . $countval);
-//            $adminKey = variable_get('searchtap_admin_key_' . $countval);
-//            $response = removeObject($itemIds, $collectionName, $adminKey);
-//            if($response=='200')
-//            {
-//             echo "Delete";
-//           watchdog('product Ids'.$itemIds.' deleted from Searchtap Server!. ');
-//            deleteTableValue($productIds);
-//            }
-//           else {
-//              echo "error";
-//                watchdog($response.' Response Code !');
-//
-//              }
-//
-//
-//
-//
-//           // deleteFullSync($idsToBeDeleted,1);
-//            }
-//    }
+
 }
+
+
 function getStoreProductIds()
 {
     $allId = getCurlRequstID();
     $json11 = json_decode(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $allId), true);
-    echo "Count Value is: " . count($json11['nodes']);
     if ($json11) {
         for ($i = 0; $i < count($json11['nodes']); $i++) {
-            //  var_dump($obh[$i]['node']['nid']);
             $ids[] = $json11['nodes'][$i]['node']['nid'];
         }
     }
-    // print_r($ids);
     return $ids;
 }
+
+
 function getTableValue($action, $count)
 {
+    $collectionID = variable_get('searchtap_collection_' . $count);
+    $adminkey = variable_get('searchtap_admin_key_' . $count);
+    $appID = variable_get('searchtap_application_key_' . $count);
     if ($action == 'add' || $action == 'update') {
         $actiondata = implode("", $action);
         if (db_table_exists('searchtap_queue')) {
@@ -410,11 +308,23 @@ function getTableValue($action, $count)
                 ->execute()
                 ->fetchAll();
             foreach ($productIds as $id) {
-                $nodeID[] = $id->entity_id;
+                $status=node_load($id->entity_id);
+                if($status->status){
+                    $nodeID[] = $id->entity_id;
+                }else{
+                    partialDelete($id->entity_id, $count);
+                }
             }
-            searchtap_reindex($count,$nodeID,$action);
+
+            if ($nodeID) {
+                searchtap_reindex($count, $nodeID, $action);
+            } else {
+                echo "No Data to Add/Update !!"."\n";
+            }
+
         }
-    } else {
+
+    } else if ($action == 'delete') {
         $actiondata = implode("", $action);
         if (db_table_exists('searchtap_queue')) {
             $productIds = db_select('searchtap_queue', 'mm')
@@ -425,47 +335,67 @@ function getTableValue($action, $count)
             foreach ($productIds as $id) {
                 $nodeID[] = $id->entity_id;
             }
-            deleteFailsafe();
+            if (!empty($nodeID)) {
+                echo "Product". $nodeID." for Delete !" ;
+                partialDelete($nodeID, $count);
+            } else {
+                echo "No data to delete !!";
+            }
         }
-    }
-}
-function formatJson($json)
-{
-    foreach ($json as $data) {
-        $viewArray = array();
-        for ($i = 0; $i < count($data); $i++) {
-            $rewriteKeys = array('nid' => 'id', 'title' => 'titleData', 'description' => 'description', 'sell_price' => 'sell_price', 'Image' => 'ImageData', 'path' => 'URL', 'constituents' => 'constituents', 'delivery_through' => 'delivery_through', 'event' => 'event', 'occasion' => 'occasion', 'relationship' => 'relationshipData', 'level' => 'level', 'sku' => 'sku', 'threshold' => 'threshold', 'Stock_Active' => 'Stock_Active', 'Delivery_Type' => 'Delivery_Type', 'Flower_Type' => 'Flower_Type', 'Gift_Category_Type' => 'Gift_Category_Type', 'Product_Category' => 'Product_Category', 'Product_Collection' => 'Product_Collection', 'Product_Type' => 'Product_Type', 'bouquet_type' => 'bouquet_type', 'cake_Type' => 'cakeTypeData', 'gift_type' => 'gift_type', 'plant_type' => 'plantTypeData', 'tag' => 'tagData', 'type' => 'type');
-            $newArr = array();
-            foreach ($data[$i]["node"] as $key => $value) {
-                if ($key == "Image") {
-                    foreach ($value as $val) {
-                        $imageVal[] = $val['src'];
-                    }
-                    $value1 = array_unique($imageVal);
-                    $newArr[$rewriteKeys[$key]] = $value1;
-                    unset($imageVal);
-                } elseif ($key == "constituents") {
-                    $newArr[$rewriteKeys[$key]] = strip_tags($value);
-                } elseif ($key == "occasion") {
-                    $occasiondata = explode(',', $value);
-                    $newArr[$rewriteKeys[$key]] = array_map('trim', $occasiondata);
-                } elseif ($key == "relationship") {
-                    $relationData = explode(',', $value);
-                    $newArr[$rewriteKeys[$key]] = $relationData;
-                } elseif ($key == "bouquet_type") {
-                    $bouData = explode(',', $value);
-                    $newArr[$rewriteKeys[$key]] = $bouData;
-                } else {
-                    $newArr[$rewriteKeys[$key]] = $value;
+    } else {
+        if (db_table_exists('searchtap_queue')) {
+            $productIds = db_select('searchtap_queue', 'mm')
+                ->fields('mm', ['entity_id'])
+                ->condition('action', 'add')
+                ->execute()
+                ->fetchAll();
+            foreach ($productIds as $id) {
+                $status=node_load($id->entity_id);
+                if($status->status){
+                    $nodeID[] = $id->entity_id;
+                }else{
+                    $nodeToDelete[]=$id->entity_id;
                 }
             }
-            $viewArray[] = $newArr;
+            if (!empty($nodeID)) {
+                searchtap_reindex($count, $nodeID, $action);
+            } else {
+                echo "No Data to Add/Update !!"."\n";
+            }
+            unset($nodeID);
+
+            // Check Queue For Delete
+            $nodeIdsForDelete=array();
+            $productIds = db_select('searchtap_queue', 'mm')
+                ->fields('mm', ['entity_id'])
+                ->condition('action', 'delete')
+                ->execute()
+                ->fetchAll();
+
+
+            foreach ($productIds as $id) {
+                $nodeIdsForDelete[] = $id->entity_id;
+            }
+            $nodeIdsForDelete=array_merge($nodeToDelete,$nodeIdsForDelete);
+            if(!empty($nodeIdsForDelete)){
+                partialDelete($nodeIdsForDelete, $count);
+               // echo "Deleted Product Id ".$nodeID;
+            }
+            else{
+                echo "Nothing To delete !!"."\n";
+            }
+            unset($nodeIdsForDelete);
+            unset($nodeToDelete);
+
+
         }
-        $viewJson = json_encode($viewArray);
-        return $viewJson;
+
     }
 }
-function deleteTableValue($produstID)
+
+// function to check queue that need to be deleted
+
+function checkQueueForDelete($produstID)
 {
     foreach ($produstID as $pid) {
         $num_deleted = db_delete('searchtap_queue')
@@ -473,6 +403,8 @@ function deleteTableValue($produstID)
             ->execute();
     }
 }
+
+/*
 function getJsonData($id)
 {
     $curl = curl_init();
@@ -493,12 +425,15 @@ function getJsonData($id)
     $err = curl_error($curl);
     curl_close($curl);
     return $result;
-}
+}*/
+
+
 function getCurlRequstID()
 {
     $curl = curl_init();
+    $filterbyNid = variable_get('filterby_nid_url_1'); // "http://marketing.floweraura.com/jsonproducts"
     curl_setopt_array($curl, array(
-        CURLOPT_URL => "http://marketing.floweraura.com/jsonproducts",
+        CURLOPT_URL => $filterbyNid,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => 2,
         CURLOPT_CAINFO => '',
@@ -515,6 +450,7 @@ function getCurlRequstID()
     curl_close($curl);
     return $result;
 }
+
 function addObjects($product_json, $collectionName, $adminKey)
 {
     $curl = curl_init();
@@ -538,17 +474,14 @@ function addObjects($product_json, $collectionName, $adminKey)
     ));
     $result = curl_exec($curl);
     $result1 = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    var_dump($result1);
     $err = curl_error($curl);
-    var_dump($err);
     curl_close($curl);
     return $result1;
 }
+
 function removeObject($productIds, $collectionName, $adminKey)
 {
     $curl = curl_init();
-    // $data_json = json_encode($productIds);
-    //  print_r($productIds);
     if ($productIds) {
         curl_setopt_array($curl, array(
             CURLOPT_URL => "https://manage.searchtap.net/v2/collections/" . $collectionName . "/records/",
@@ -577,13 +510,17 @@ function removeObject($productIds, $collectionName, $adminKey)
         return $response;
     }
 }
+
 function searchtapCurl($count, $skip)
 {
-    $collectionName = "QS2NFJEFHM67TSIACC3I6HKA";
-    $adminKey = "A6FNJP54E9JGCMQUKVKP27JT";
-    $applicationId = "Z9VRZQPHURJ2SZDJWUB4KH6G";
+    $countlocal = $count;
+    $count = 1;
+    $collectionID = variable_get('searchtap_collection_' . $count);
+    $adminkey = variable_get('searchtap_admin_key_' . $count);
+    $appID = variable_get('searchtap_application_key_' . $count);
+    $count = $countlocal;
     $data = json_encode(array(
-        'collection' => $collectionName,
+        'collection' => $collectionID,
         'fields' => ["id"],
         'count' => $count,
         'skip' => $skip
@@ -591,7 +528,7 @@ function searchtapCurl($count, $skip)
     try {
         $curl = curl_init();
         curl_setopt_array($curl, array(
-            CURLOPT_URL => "https://" . $applicationId . "-fast.searchtap.net/v2",
+            CURLOPT_URL => "https://" . $appID . "-fast.searchtap.net/v2",
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_CAINFO => '',
@@ -605,7 +542,7 @@ function searchtapCurl($count, $skip)
             CURLOPT_HTTPHEADER => array(
                 "cache-control: no-cache",
                 "content-type: application/json",
-                "Authorization:  Bearer " . $adminKey
+                "Authorization:  Bearer " . $adminkey
             ),
         ));
         $result = curl_exec($curl);
@@ -620,6 +557,7 @@ function searchtapCurl($count, $skip)
     } catch (error $error) {
     }
 }
+
 function searchtap_add_instance(array $form, array &$form_state, $setCount = 0)
 {
     drupal_set_title(t('Add searchtap instance'));
@@ -647,6 +585,24 @@ function searchtap_add_instance(array $form, array &$form_state, $setCount = 0)
         '#required' => TRUE,
         '#default_value' => variable_get('searchtap_admin_key_' . $count)
     );
+    $form['searchtap_application_key_' . $count] = array(
+        '#type' => 'textfield',
+        '#title' => t('Enter application key'),
+        '#description' => t('Enter the application key provided by searchtap.'),
+        '#maxlength' => 256,
+        '#required' => TRUE,
+        '#default_value' => variable_get('searchtap_application_key_' . $count)
+    );
+
+    $form['filterby_nid_url_' . $count] = array(
+        '#type' => 'textfield',
+        '#title' => t('Enter filter_by_nid URL(API)'),
+        '#description' => t('Enter the URL created by view to get node_id.'),
+        '#maxlength' => 256,
+        '#required' => TRUE,
+        '#default_value' => variable_get('filterby_nid_url_' . $count)
+    );
+
     $form['searchtap_view_' . $count] = array(
         '#type' => 'select',
         '#title' => t('Select view'),
@@ -687,50 +643,63 @@ function searchtap_add_instance(array $form, array &$form_state, $setCount = 0)
     else
         return (system_settings_form($form));
 }
+
 function searchtap_add_instance_submit($form, $form_state)
 {
     $count = $form_state['clicked_button']['#attributes']['count'];
     $collection = $form_state['input']['searchtap_collection_' . $count];
     $adminKey = $form_state['input']['searchtap_admin_key_' . $count];
+    $applicationkey = $form_state['input']['searchtap_application_key_' . $count];;
+    $filterbynid_URL = $form_state['input']['filterby_nid_url_' . $count];;
     $view = $form_state['input']['searchtap_view_' . $count];
     $fields = $form_state['input']['searchtap_fields_' . $count];
     variable_set('searchtap_collection_' . $count, $collection);
     variable_set('searchtap_admin_key_' . $count, $adminKey);
+    variable_set('searchtap_application_key_' . $count, $applicationkey);
+    variable_set('filterby_nid_url_' . $count, $filterbynid_URL);
     variable_set('searchtap_view_' . $count, $view);
     variable_set('searchtap_fields_' . $count, $fields);
     drupal_set_message(t('The configuration options have been saved.'));
 }
+
 function searchtap_ajax_select_view($form, $form_state)
 {
     global $count;
     return $form['searchtap_fields_' . $count];
 }
+
 function searchtap_add_instance_reindex($form, &$form_state, $count)
 {
     searchtap_reindex($count);
     drupal_set_message(t('Entities indexed successfully'));
 }
+
 function searchtap_add_instance_edit($form, &$form_state, $count)
 {
     return drupal_get_form('searchtap_add_instance', $count);
 }
+
 function searchtap_add_instance_delete($form, &$form_state, $count)
 {
     variable_del('searchtap_collection_' . $count);
     variable_del('searchtap_admin_key_' . $count);
+    variable_del('searchtap_application_key_' . $count);
+    variable_del('filterby_nid_url_' . $count);
     variable_del('searchtap_view_' . $count);
     variable_del('searchtap_fields_' . $count);
     drupal_set_message(t('Deleted successfully'));
 }
+
 function searchtap_cron_reindex()
 {
     $count = variable_get('searchtap_count');
     $selectedViewName = variable_get('searchtap_view_' . $count);
     for ($i = 1; $i <= $count; $i++) {
         if (variable_get('searchtap_collection_' . $i))
-            searchtap_reindex($i,$selectedViewName);
+            searchtap_reindex($i);
     }
 }
+
 function searchtap_add_template(array $form, array &$form_state)
 {
     $form['searchtap_template'] = array(
@@ -742,4 +711,3 @@ function searchtap_add_template(array $form, array &$form_state)
     );
     return (system_settings_form($form));
 }
-
